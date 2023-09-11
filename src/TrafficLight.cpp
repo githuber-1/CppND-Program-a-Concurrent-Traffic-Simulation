@@ -12,10 +12,10 @@ T MessageQueue<T>::receive()
     // to wait for and receive new messages and pull them from the queue using move semantics. 
     // The received object should then be returned by the receive function.
     std::unique_lock<std::mutex> lock(_mutex);
-    _cond.wait(lock, [] {return !_queue.empty()}); // wait for queue to not be empty
+    _cond.wait(lock, [this] { return !_queue.empty(); }); // wait for queue to not be empty
 
     T msg = std::move(_queue.back());
-    return &&msg
+    return msg;
 }
 
 template <typename T>
@@ -36,16 +36,20 @@ TrafficLight::TrafficLight()
     _currentPhase = TrafficLightPhase::red;
 }
 
-/*
-
 void TrafficLight::waitForGreen()
 {
     // FP.5b : add the implementation of the method waitForGreen, in which an infinite while-loop 
     // runs and repeatedly calls the receive function on the message queue. 
     // Once it receives TrafficLightPhase::green, the method returns.
+    while (true)
+    {
+        TrafficLightPhase phase = _messageQueue.receive();
+        if (phase == TrafficLightPhase::green)
+        {
+            return;
+        }
+    }
 }
-
-*/
 
 TrafficLightPhase TrafficLight::getCurrentPhase()
 {
@@ -54,7 +58,7 @@ TrafficLightPhase TrafficLight::getCurrentPhase()
 
 void TrafficLight::simulate()
 {
-    // FP.2b : Finally, the private method „cycleThroughPhases“ should be started in a thread when the public method „simulate“ is called. To do this, use the thread queue in the base class. 
+    // FP.2b : Finally, the private method "cycleThroughPhases" should be started in a thread when the public method „simulate“ is called. To do this, use the thread queue in the base class. 
     threads.emplace_back(std::thread(&TrafficLight::cycleThroughPhases, this));
 }
 
@@ -71,7 +75,7 @@ void TrafficLight::cycleThroughPhases()
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator(seed);
     std::uniform_int_distribution<int> distribution(4, 6);
-    int cycle_duration = distribution(generator);  
+    int cycle_duration = distribution(generator);
 
     // start time
     std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();      
@@ -79,12 +83,12 @@ void TrafficLight::cycleThroughPhases()
     while (true)
     {
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
 
         if (duration > cycle_duration)
         {
             // update current phase
-            _currentPhase = _currentPhase == TrafficLightPhase::green ? red : green;
+            _currentPhase = (_currentPhase == TrafficLightPhase::green) ? red : green;
 
             // update message queue
             TrafficLightPhase phase = _currentPhase;
