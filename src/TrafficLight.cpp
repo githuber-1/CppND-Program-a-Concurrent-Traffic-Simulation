@@ -4,16 +4,19 @@
 
 /* Implementation of class "MessageQueue" */
 
-/* 
+
 template <typename T>
 T MessageQueue<T>::receive()
 {
     // FP.5a : The method receive should use std::unique_lock<std::mutex> and _condition.wait() 
     // to wait for and receive new messages and pull them from the queue using move semantics. 
-    // The received object should then be returned by the receive function. 
-}
+    // The received object should then be returned by the receive function.
+    std::unique_lock<std::mutex> lock(_mutex);
+    _cond.wait(lock, [] {return !_queue.empty()}); // wait for queue to not be empty
 
-*/
+    T msg = std::move(_queue.back());
+    return &&msg
+}
 
 template <typename T>
 void MessageQueue<T>::send(T &&msg)
@@ -62,34 +65,30 @@ void TrafficLight::cycleThroughPhases()
     // and toggles the current phase of the traffic light between red and green and sends an update method 
     // to the message queue using move semantics. The cycle duration should be a random value between 4 and 6 seconds. 
     // Also, the while-loop should use std::this_thread::sleep_for to wait 1ms between two cycles. 
-    
-    // start time
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
     // get first cycle duration
     // Seed the random number generator
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator(seed);
     std::uniform_int_distribution<int> distribution(4, 6);
-    int cycle_duration = distribution(generator);        
+    int cycle_duration = distribution(generator);  
+
+    // start time
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();      
 
     while (true)
     {
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-     
-     
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
 
         if (duration > cycle_duration)
         {
-            if ( getCurrentPhase() == TrafficLightPhase::red )
-            {
-                _currentPhase = TrafficLightPhase::green;
-            }
-            else
-            {
-                _currentPhase = TrafficLightPhase::red;
-            }
+            // update current phase
+            _currentPhase = _currentPhase == TrafficLightPhase::green ? red : green;
+
+            // update message queue
+            TrafficLightPhase phase = _currentPhase;
+            _messageQueue.send(std::move(phase));
             
             // reset duration and start time
             int cycle_duration = distribution(generator);
